@@ -2,7 +2,7 @@
 
 A comprehensive real-time dashboard for visualizing option chain data stored in PostgreSQL. Built with Streamlit and Plotly for interactive data analysis.
 
-**Just enter the credentials in the `.env` file and run the `run_dashboard.py` file. That's all you need to do!**
+🚀 **IMPORTANT:** Just enter the credentials in the `.env` file and run the `run_dashboard.py` file. ✅ That's all you need to do!
 
 
 ## 🚀 Features
