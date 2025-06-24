@@ -225,18 +225,21 @@ def get_data_by_timeframe(symbol, expiry_date=None, selected_date=None, timefram
             # Convert fetch_time to datetime if it's not already
             df['fetch_time'] = pd.to_datetime(df['fetch_time'])
             
-            # Apply time interval filtering
+            # Apply time interval filtering for display purposes only
             if timeframe_minutes > 1:
-                # Round timestamps UP to the nearest interval
-                df['time_rounded'] = df['fetch_time'].dt.ceil(f'{timeframe_minutes}min')
+                # Create a copy for display intervals, but keep original fetch_time for current price
+                df_display = df.copy()
+                df_display['time_rounded'] = df_display['fetch_time'].dt.ceil(f'{timeframe_minutes}min')
                 
                 # For each interval and strike, get the last available data point
-                # We use 'last' here to get the most recent snapshot for each interval and strike, not the mean.
-                df = df.groupby(['time_rounded', 'Strike Price']).last().reset_index()
+                df_display = df_display.groupby(['time_rounded', 'Strike Price']).last().reset_index()
                 
-                # Set the fetch_time to the interval time for consistency
-                df['fetch_time'] = df['time_rounded']
-                df = df.drop(columns=['time_rounded'])
+                # Use rounded time for display, but keep original fetch_time for current price calculation
+                df_display['display_time'] = df_display['time_rounded']
+                df_display = df_display.drop(columns=['time_rounded'])
+                
+                # Return the display dataframe, but ensure current price comes from original data
+                return df_display.sort_values(['display_time', 'Strike Price']).reset_index(drop=True)
         
         return df.sort_values(['fetch_time', 'Strike Price']).reset_index(drop=True)
     except Exception as e:
@@ -290,15 +293,22 @@ def get_dashboard_stats():
             'latest_time': None
         }
 
-def create_spot_price_chart(df):
-    """Create spot price trend chart with dynamic y-axis range for better visibility"""
+def create_spot_price_chart(df, selected_date):
+    """Create spot price trend chart for the selected date only"""
     if df.empty:
+        return go.Figure()
+    
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
         return go.Figure()
     
     fig = go.Figure()
     
-    # Group by fetch_time and get latest spot price
-    spot_data = df.groupby('fetch_time')['Spot Price'].last().reset_index()
+    # Group by fetch_time and get latest spot price for the selected date
+    spot_data = df_filtered.groupby('fetch_time')['Spot Price'].last().reset_index()
     
     # Calculate y-axis range with margin
     min_spot = spot_data['Spot Price'].min()
@@ -319,7 +329,7 @@ def create_spot_price_chart(df):
     ))
     
     fig.update_layout(
-        title='📈 Spot Price Trend Over Time',
+        title=f'📈 Spot Price Trend - {selected_date}',
         xaxis_title='Time',
         yaxis_title='Spot Price',
         height=400,
@@ -331,13 +341,20 @@ def create_spot_price_chart(df):
     
     return fig
 
-def create_oi_chart(df):
-    """Create OI comparison chart"""
+def create_oi_chart(df, selected_date):
+    """Create OI comparison chart for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Get latest data for each strike
-    latest_data = df.groupby('Strike Price').last().reset_index()
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Get latest data for each strike for the selected date
+    latest_data = df_filtered.groupby('Strike Price').last().reset_index()
     
     fig = go.Figure()
     
@@ -358,7 +375,7 @@ def create_oi_chart(df):
     ))
     
     fig.update_layout(
-        title='📊 Open Interest by Strike Price',
+        title=f'📊 Open Interest by Strike Price - {selected_date}',
         xaxis_title='Strike Price',
         yaxis_title='Open Interest',
         height=400,
@@ -369,13 +386,20 @@ def create_oi_chart(df):
     
     return fig
 
-def create_volume_chart(df):
-    """Create volume comparison chart"""
+def create_volume_chart(df, selected_date):
+    """Create volume comparison chart for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Get latest data for each strike
-    latest_data = df.groupby('Strike Price').last().reset_index()
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Get latest data for each strike for the selected date
+    latest_data = df_filtered.groupby('Strike Price').last().reset_index()
     
     fig = go.Figure()
     
@@ -396,7 +420,7 @@ def create_volume_chart(df):
     ))
     
     fig.update_layout(
-        title='📈 Volume by Strike Price',
+        title=f'📈 Volume by Strike Price - {selected_date}',
         xaxis_title='Strike Price',
         yaxis_title='Volume',
         height=400,
@@ -407,13 +431,20 @@ def create_volume_chart(df):
     
     return fig
 
-def create_iv_chart(df):
-    """Create Implied Volatility chart"""
+def create_iv_chart(df, selected_date):
+    """Create Implied Volatility chart for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Get latest data for each strike
-    latest_data = df.groupby('Strike Price').last().reset_index()
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Get latest data for each strike for the selected date
+    latest_data = df_filtered.groupby('Strike Price').last().reset_index()
     
     fig = go.Figure()
     
@@ -436,7 +467,7 @@ def create_iv_chart(df):
     ))
     
     fig.update_layout(
-        title='📊 Implied Volatility by Strike Price',
+        title=f'📊 Implied Volatility by Strike Price - {selected_date}',
         xaxis_title='Strike Price',
         yaxis_title='Implied Volatility (%)',
         height=400,
@@ -447,13 +478,20 @@ def create_iv_chart(df):
     
     return fig
 
-def create_greeks_chart(df, greek_type='Delta'):
-    """Create Greeks comparison chart"""
+def create_greeks_chart(df, greek_type='Delta', selected_date=None):
+    """Create Greeks comparison chart for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Get latest data for each strike
-    latest_data = df.groupby('Strike Price').last().reset_index()
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Get latest data for each strike for the selected date
+    latest_data = df_filtered.groupby('Strike Price').last().reset_index()
     
     fig = go.Figure()
     
@@ -480,7 +518,7 @@ def create_greeks_chart(df, greek_type='Delta'):
         ))
     
     fig.update_layout(
-        title=f'📊 {greek_type} by Strike Price',
+        title=f'📊 {greek_type} by Strike Price - {selected_date}',
         xaxis_title='Strike Price',
         yaxis_title=f'{greek_type}',
         height=400,
@@ -491,13 +529,20 @@ def create_greeks_chart(df, greek_type='Delta'):
     
     return fig
 
-def create_pcr_chart(df):
-    """Create Put-Call Ratio chart"""
+def create_pcr_chart(df, selected_date):
+    """Create Put-Call Ratio chart for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Group by fetch_time and calculate PCR
-    pcr_data = df.groupby('fetch_time').agg({
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Group by fetch_time and calculate PCR for the selected date
+    pcr_data = df_filtered.groupby('fetch_time').agg({
         'PE OI': 'sum',
         'CE OI': 'sum'
     }).reset_index()
@@ -520,7 +565,7 @@ def create_pcr_chart(df):
                   annotation_text="PCR = 1 (Neutral)")
     
     fig.update_layout(
-        title='📊 Put-Call Ratio Over Time',
+        title=f'📊 Put-Call Ratio Over Time - {selected_date}',
         xaxis_title='Time',
         yaxis_title='Put-Call Ratio',
         height=400,
@@ -531,13 +576,20 @@ def create_pcr_chart(df):
     
     return fig
 
-def create_heatmap(df):
-    """Create heatmap of OI data"""
+def create_heatmap(df, selected_date):
+    """Create heatmap of OI data for the selected date only"""
     if df.empty:
         return go.Figure()
     
-    # Get latest data for each strike
-    latest_data = df.groupby('Strike Price').last().reset_index()
+    # Filter data for the selected date only
+    df['fetch_time'] = pd.to_datetime(df['fetch_time'])
+    df_filtered = df[df['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
+        return go.Figure()
+    
+    # Get latest data for each strike for the selected date
+    latest_data = df_filtered.groupby('Strike Price').last().reset_index()
     
     # Create heatmap data
     strikes = latest_data['Strike Price'].tolist()
@@ -553,7 +605,7 @@ def create_heatmap(df):
     ))
     
     fig.update_layout(
-        title='🔥 Open Interest Heatmap',
+        title=f'🔥 Open Interest Heatmap - {selected_date}',
         xaxis_title='Strike Price',
         yaxis_title='Option Type',
         height=400,
@@ -646,43 +698,57 @@ def create_pivot_table(df, value_col='CE OI'):
         st.error(f"Error creating pivot table: {e}")
         return pd.DataFrame()
 
-def calculate_analytics(df):
-    """Calculate various analytics from the data"""
+def calculate_analytics(df, selected_date, original_df=None):
+    """Calculate various analytics from the most recent data of the selected date"""
     if df.empty:
+        return {}
+    
+    # Use original_df if provided (for timeframe filtering), otherwise use df
+    data_source = original_df if original_df is not None else df
+    
+    # Filter data for the selected date only
+    data_source['fetch_time'] = pd.to_datetime(data_source['fetch_time'])
+    df_filtered = data_source[data_source['fetch_time'].dt.date == pd.to_datetime(selected_date).date()]
+    
+    if df_filtered.empty:
         return {}
     
     analytics = {}
     
-    # Latest data
-    latest = df.groupby('Strike Price').last().reset_index()
+    # Get the most recent data for each strike (latest fetch_time) - ALWAYS from original data
+    latest_fetch_time = df_filtered['fetch_time'].max()
+    latest_data = df_filtered[df_filtered['fetch_time'] == latest_fetch_time]
     
-    # Basic stats
-    analytics['total_strikes'] = len(latest)
-    analytics['avg_spot_price'] = latest['Spot Price'].mean()
-    analytics['current_spot'] = latest['Spot Price'].iloc[0] if len(latest) > 0 else 0
+    # Basic stats from most recent data
+    analytics['total_strikes'] = len(latest_data)
+    analytics['avg_spot_price'] = latest_data['Spot Price'].mean()
+    analytics['current_spot'] = latest_data['Spot Price'].iloc[0] if len(latest_data) > 0 else 0
     
-    # OI Analysis
-    analytics['total_ce_oi'] = latest['CE OI'].sum()
-    analytics['total_pe_oi'] = latest['PE OI'].sum()
+    # OI Analysis from most recent data
+    analytics['total_ce_oi'] = latest_data['CE OI'].sum()
+    analytics['total_pe_oi'] = latest_data['PE OI'].sum()
     analytics['pcr'] = analytics['total_pe_oi'] / analytics['total_ce_oi'] if analytics['total_ce_oi'] > 0 else 0
     
-    # Volume Analysis
-    analytics['total_ce_volume'] = latest['CE Volume'].sum()
-    analytics['total_pe_volume'] = latest['PE Volume'].sum()
+    # Volume Analysis from most recent data
+    analytics['total_ce_volume'] = latest_data['CE Volume'].sum()
+    analytics['total_pe_volume'] = latest_data['PE Volume'].sum()
     
-    # IV Analysis
-    analytics['avg_ce_iv'] = latest['CE IV'].mean()
-    analytics['avg_pe_iv'] = latest['PE IV'].mean()
+    # IV Analysis from most recent data
+    analytics['avg_ce_iv'] = latest_data['CE IV'].mean()
+    analytics['avg_pe_iv'] = latest_data['PE IV'].mean()
     
-    # Find ATM strike
-    if 'ATM Strike' in latest.columns:
-        atm_strike = latest['ATM Strike'].iloc[0]
-        atm_data = latest[latest['Strike Price'] == atm_strike]
+    # Find ATM strike from most recent data
+    if 'ATM Strike' in latest_data.columns:
+        atm_strike = latest_data['ATM Strike'].iloc[0]
+        atm_data = latest_data[latest_data['Strike Price'] == atm_strike]
         if not atm_data.empty:
             analytics['atm_ce_oi'] = atm_data['CE OI'].iloc[0]
             analytics['atm_pe_oi'] = atm_data['PE OI'].iloc[0]
             analytics['atm_ce_iv'] = atm_data['CE IV'].iloc[0]
             analytics['atm_pe_iv'] = atm_data['PE IV'].iloc[0]
+    
+    # Add timestamp of the most recent data
+    analytics['latest_update'] = latest_fetch_time
     
     return analytics
 
@@ -922,15 +988,26 @@ def main():
     # Get data
     if selected_symbol and 'selected_date' in locals():
         expiry_filter = None if selected_expiry == "All Expiries" else selected_expiry
+        
+        # Get original data (1-minute intervals) for current price calculation
+        original_df = get_data_by_timeframe(selected_symbol, expiry_filter, selected_date, 1)
+        
+        # Get timeframe-filtered data for display
         df = get_data_by_timeframe(selected_symbol, expiry_filter, selected_date, timeframe_minutes)
         
         if not df.empty:
-            # Calculate analytics
-            analytics = calculate_analytics(df)
+            # Calculate analytics using original data for current prices
+            analytics = calculate_analytics(df, selected_date, original_df)
             
             # Analytics section
             if "Market Analytics" in visible_sections:
                 st.subheader(f"📊 Market Analytics - {selected_date} ({selected_timeframe})")
+                
+                # Show latest update time
+                if 'latest_update' in analytics:
+                    latest_time = analytics['latest_update'].strftime('%H:%M:%S') if analytics['latest_update'] else 'N/A'
+                    st.markdown(f"**🕐 Latest Update: {latest_time}**")
+                
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
                     st.metric("Current Spot", f"{analytics.get('current_spot', 0):.2f}")
@@ -953,37 +1030,37 @@ def main():
                     col1, col2 = st.columns(2)
                     with col1:
                         if show_spot_chart:
-                            spot_chart = create_spot_price_chart(df)
+                            spot_chart = create_spot_price_chart(df, selected_date)
                             st.plotly_chart(spot_chart, use_container_width=True)
                     with col2:
                         if show_oi_chart:
-                            oi_chart = create_oi_chart(df)
+                            oi_chart = create_oi_chart(df, selected_date)
                             st.plotly_chart(oi_chart, use_container_width=True)
                 # Second row of charts
                 if show_volume_chart or show_iv_chart:
                     col1, col2 = st.columns(2)
                     with col1:
                         if show_volume_chart:
-                            volume_chart = create_volume_chart(df)
+                            volume_chart = create_volume_chart(df, selected_date)
                             st.plotly_chart(volume_chart, use_container_width=True)
                     with col2:
                         if show_iv_chart:
-                            iv_chart = create_iv_chart(df)
+                            iv_chart = create_iv_chart(df, selected_date)
                             st.plotly_chart(iv_chart, use_container_width=True)
                 # Third row of charts
                 if show_greeks_chart or show_pcr_chart:
                     col1, col2 = st.columns(2)
                     with col1:
                         if show_greeks_chart:
-                            greeks_chart = create_greeks_chart(df, greek_type)
+                            greeks_chart = create_greeks_chart(df, greek_type, selected_date)
                             st.plotly_chart(greeks_chart, use_container_width=True)
                     with col2:
                         if show_pcr_chart:
-                            pcr_chart = create_pcr_chart(df)
+                            pcr_chart = create_pcr_chart(df, selected_date)
                             st.plotly_chart(pcr_chart, use_container_width=True)
                 # Fourth row - heatmap
                 if show_heatmap:
-                    heatmap_chart = create_heatmap(df)
+                    heatmap_chart = create_heatmap(df, selected_date)
                     st.plotly_chart(heatmap_chart, use_container_width=True)
             
             # Pivot Table Section
