@@ -1481,5 +1481,17 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # Before displaying the pivot tables in Strike vs. Time Analysis, add custom CSS for better cell width
+    st.markdown("""
+    <style>
+    .stDataFrame tbody td, .stDataFrame thead th {
+        min-width: 120px !important;
+        max-width: 220px !important;
+        font-size: 1.05rem !important;
+        white-space: nowrap !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main() 
