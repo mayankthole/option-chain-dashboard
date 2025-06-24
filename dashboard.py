@@ -1284,6 +1284,8 @@ def main():
                                 if isinstance(trace, go.Bar):
                                     trace.textangle = 0
                             st.plotly_chart(fig, use_container_width=True)
+                            # Create pivot_table_df for this chart type
+                            pivot_table_df = create_pivot_table(df, value_col=pivot_metric)
                             # Format only numeric columns
                             numeric_cols = pivot_table_df.select_dtypes(include=[np.number]).columns
                             format_dict = {col: '{:,.2f}' for col in numeric_cols}
