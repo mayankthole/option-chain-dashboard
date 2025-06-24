@@ -227,18 +227,15 @@ def get_data_by_timeframe(symbol, expiry_date=None, selected_date=None, timefram
             
             # Apply time interval filtering for display purposes only
             if timeframe_minutes > 1:
-                # Create a copy for display intervals, but keep original fetch_time for current price
                 df_display = df.copy()
+                # Round UP to the next interval (ceil)
                 df_display['time_rounded'] = df_display['fetch_time'].dt.ceil(f'{timeframe_minutes}min')
-                
+                # Format as HH:MM for display
+                df_display['time_str'] = df_display['time_rounded'].dt.strftime('%H:%M')
                 # For each interval and strike, get the last available data point
                 df_display = df_display.groupby(['time_rounded', 'Strike Price']).last().reset_index()
-                
-                # Use rounded time for display, but keep original fetch_time for current price calculation
+                # Use rounded time for display
                 df_display['display_time'] = df_display['time_rounded']
-                df_display = df_display.drop(columns=['time_rounded'])
-                
-                # Return the display dataframe, but ensure current price comes from original data
                 return df_display.sort_values(['display_time', 'Strike Price']).reset_index(drop=True)
         
         return df.sort_values(['fetch_time', 'Strike Price']).reset_index(drop=True)
@@ -677,11 +674,15 @@ def create_pivot_table(df, value_col='CE OI'):
 
     try:
         df['fetch_time'] = pd.to_datetime(df['fetch_time'])
-        df['time_str'] = df['fetch_time'].dt.strftime('%H:%M')
+        # Use 'time_str' if present (rounded to interval), else fallback to fetch_time
+        if 'time_str' in df.columns:
+            time_col = 'time_str'
+        else:
+            time_col = df['fetch_time'].dt.strftime('%H:%M')
         
         pivot_df = df.pivot_table(
             index='Strike Price', 
-            columns='time_str', 
+            columns=time_col, 
             values=value_col,
             aggfunc='last'
         )
@@ -1105,26 +1106,29 @@ def main():
                         key='bar_chart_variation'
                     )
                 # --- MOVE PRICE CHART RENDERING HERE ---
-                if show_price_chart and 'fetch_time' in df.columns and 'Spot Price' in df.columns:
-                    price_df = df[['fetch_time', 'Spot Price']].drop_duplicates().sort_values('fetch_time')
-                    if not price_df.empty:
-                        price_fig = go.Figure()
-                        price_fig.add_trace(go.Scatter(
-                            x=price_df['fetch_time'],
-                            y=price_df['Spot Price'],
-                            mode='lines+markers',
-                            name='Spot Price',
-                            line=dict(color='#1f77b4', width=3),
-                            marker=dict(size=7, color='#1f77b4'),
-                        ))
-                        price_fig.update_layout(
-                            title='Spot Price Trend',
-                            xaxis_title='Time',
-                            yaxis_title='Spot Price',
-                            height=350,
-                            template='plotly_white',
-                        )
-                        st.plotly_chart(price_fig, use_container_width=True)
+                if show_price_chart:
+                    # Always use 1-minute interval data for spot price trend
+                    price_df_1min = get_data_by_timeframe(selected_symbol, None if selected_expiry == "All Expiries" else selected_expiry, selected_date, 1)
+                    if not price_df_1min.empty and 'fetch_time' in price_df_1min.columns and 'Spot Price' in price_df_1min.columns:
+                        price_df = price_df_1min[['fetch_time', 'Spot Price']].drop_duplicates().sort_values('fetch_time')
+                        if not price_df.empty:
+                            price_fig = go.Figure()
+                            price_fig.add_trace(go.Scatter(
+                                x=price_df['fetch_time'],
+                                y=price_df['Spot Price'],
+                                mode='lines+markers',
+                                name='Spot Price',
+                                line=dict(color='#1f77b4', width=3),
+                                marker=dict(size=7, color='#1f77b4'),
+                            ))
+                            price_fig.update_layout(
+                                title='Spot Price Trend (1-Minute Interval)',
+                                xaxis_title='Time',
+                                yaxis_title='Spot Price',
+                                height=350,
+                                template='plotly_white',
+                            )
+                            st.plotly_chart(price_fig, use_container_width=True)
                 # --- END PRICE CHART RENDERING ---
                 if pivot_metric:
                     if bar_chart_variation == "Double Stacked Bar Chart (CE/PE)":
@@ -1143,51 +1147,53 @@ def main():
                                         fig.add_trace(go.Bar(
                                             x=ce_pivot['Strike Price'],
                                             y=ce_pivot[time_col],
-                                            name=f"CE {time_col}",
+                                            name=f"{time_col}",
                                             text=[f'{v:,.0f}' if v > 0 else '' for v in ce_pivot[time_col]],
                                             textposition='inside',
                                             orientation='v',
                                             marker_color=palette[i % len(palette)],
                                             offsetgroup='CE',
-                                            legendgroup='CE',
-                                            showlegend=True if i == 0 else False,
+                                            legendgroup=f"{time_col}",
+                                            showlegend=True,
                                             customdata=np.stack([['CE']*len(ce_pivot)], axis=-1),
                                         ))
                                         fig.add_trace(go.Bar(
                                             x=pe_pivot['Strike Price'],
                                             y=pe_pivot[time_col],
-                                            name=f"PE {time_col}",
+                                            name=f"{time_col}",
                                             text=[f'{v:,.0f}' if v > 0 else '' for v in pe_pivot[time_col]],
                                             textposition='inside',
                                             orientation='v',
                                             marker_color=palette[i % len(palette)],
                                             offsetgroup='PE',
-                                            legendgroup='PE',
-                                            showlegend=True if i == 0 else False,
+                                            legendgroup=f"{time_col}",
+                                            showlegend=False,
                                             customdata=np.stack([['PE']*len(pe_pivot)], axis=-1),
                                         ))
                                     else:
                                         fig.add_trace(go.Bar(
                                             y=ce_pivot['Strike Price'],
                                             x=ce_pivot[time_col],
-                                            name=f"CE {time_col}",
+                                            name=f"{time_col}",
                                             text=[f'{v:,.0f}' if v > 0 else '' for v in ce_pivot[time_col]],
                                             textposition='inside',
                                             orientation='h',
                                             marker_color=palette[i % len(palette)],
                                             offsetgroup='CE',
-                                            legendgroup='CE',
+                                            legendgroup=f"{time_col}",
+                                            showlegend=True,
                                         ))
                                         fig.add_trace(go.Bar(
                                             y=pe_pivot['Strike Price'],
                                             x=pe_pivot[time_col],
-                                            name=f"PE {time_col}",
+                                            name=f"{time_col}",
                                             text=[f'{v:,.0f}' if v > 0 else '' for v in pe_pivot[time_col]],
                                             textposition='inside',
                                             orientation='h',
                                             marker_color=palette[i % len(palette)],
                                             offsetgroup='PE',
-                                            legendgroup='PE',
+                                            legendgroup=f"{time_col}",
+                                            showlegend=True,
                                         ))
                                 fig.update_layout(
                                     barmode='stack',
@@ -1195,7 +1201,7 @@ def main():
                                     title_text=f'<b>Double Stacked Bar Chart (CE/PE) for {pivot_metric[3:]}</b>',
                                     xaxis_title='Strike Price' if chart_orientation == "Vertical" else f'Total {pivot_metric}',
                                     yaxis_title=f'Total {pivot_metric}' if chart_orientation == "Vertical" else 'Strike Price',
-                                    legend_title='Type & Time Interval',
+                                    legend_title='Time Interval',
                                     height=500,
                                     template='plotly_white',
                                 )
